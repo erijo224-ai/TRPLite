@@ -1,0 +1,10 @@
+## Interface: 11402
+## Title: TRPLite
+## Notes: Lightweight RP profile addon. Wire-compatible with TurtleRP (TTRP channel).
+## Author: Zleec
+## Version: 0.2.0
+## SavedVariables: TRPLiteCharacters, TRPLiteSettings
+## SavedVariablesPerCharacter: TRPLiteMyProfile
+
+TRPLite.lua
+TRPLite_UI.lua

@@ -1,0 +1,14 @@
+# Local-only backup snapshots created during development.
+_backups/
+*.bak
+
+# OS metadata.
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor scratch files.
+*.swp
+*~
+.vscode/
+.idea/
