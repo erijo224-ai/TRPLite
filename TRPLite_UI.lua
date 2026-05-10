@@ -184,9 +184,35 @@ local function buildDirectory()
   end)
   prof:SetPoint("BOTTOMLEFT", refresh, "BOTTOMRIGHT", 4, 0)
 
+  -- Clean: remove offline characters (no ping in last 5 minutes) from
+  -- the cache. Confirmation popup before doing it so a misclick can't
+  -- nuke the directory.
+  local clean = makeButton(f, "Clean", 80, 22, function()
+    StaticPopup_Show("TRPLITE_CONFIRM_CLEAN")
+  end)
+  clean:SetPoint("BOTTOMLEFT", prof, "BOTTOMRIGHT", 4, 0)
+
   Directory = f
   return f
 end
+
+-- Confirmation popup for the directory's Clean button. Defined once at
+-- file load — StaticPopupDialogs is global and persists for the session.
+StaticPopupDialogs["TRPLITE_CONFIRM_CLEAN"] = {
+  text         = "Remove all offline characters (no ping in 5+ minutes) from the TRPLite directory?",
+  button1      = YES,
+  button2      = NO,
+  OnAccept     = function()
+    local n = TRPLite.cleanOffline()
+    TRPLite.log("Removed " .. n .. " offline character" ..
+                (n == 1 and "" or "s") .. ".")
+    TRPLite.UI.refreshDirectory()
+  end,
+  timeout      = 0,
+  whileDead    = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
 
 -- Build/update one row in the directory list.
 local function setRow(row, name, zone, online, char)

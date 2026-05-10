@@ -2,7 +2,7 @@
 ## Title: TRPLite
 ## Notes: Lightweight RP profile addon. Wire-compatible with TurtleRP (TTRP channel).
 ## Author: Zleec
-## Version: 0.2.0
+## Version: 0.2.1
 ## SavedVariables: TRPLiteCharacters, TRPLiteSettings
 ## SavedVariablesPerCharacter: TRPLiteMyProfile
 

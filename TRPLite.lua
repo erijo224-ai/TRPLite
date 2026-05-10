@@ -33,7 +33,7 @@
 
 TRPLite = TRPLite or {}
 TRPLite.channelName     = "TTRP"
-TRPLite.addonVersion    = "0.2.0"   -- v0.1.0 backed up in _backups/v0.1.0/
+TRPLite.addonVersion    = "0.2.1"   -- v0.2.0 first stable release
 TRPLite.protocolVersion = "1.1.0"   -- match TurtleRP wire protocol
 TRPLite.chunkSize       = 200       -- chars of payload per chunked response
 
@@ -250,6 +250,30 @@ end
 function TRPLite.bumpKey(typ)
   if not TRPLiteMyProfile then return end
   TRPLiteMyProfile["key" .. typ] = TRPLite.randomKey()
+end
+
+-- Remove any character whose last ping is missing or older than `threshold`
+-- seconds (default 300 = 5 minutes). Returns the number of characters
+-- removed. Also clears the matching live tempBuffers entry so a
+-- mid-flight chunked response can't get reattached to a wiped character.
+-- The user's own character isn't a special case here — they're never in
+-- TRPLiteCharacters in the first place; their data lives in
+-- TRPLiteMyProfile and is unaffected.
+function TRPLite.cleanOffline(threshold)
+  threshold = threshold or 300
+  if not TRPLiteCharacters then return 0 end
+  local now = time()
+  local removed = 0
+  for name in pairs(TRPLiteCharacters) do
+    local ts = TRPLite.queryablePlayers[name]
+    if not ts or (now - ts) > threshold then
+      TRPLiteCharacters[name]      = nil
+      TRPLite.queryablePlayers[name] = nil
+      TRPLite.tempBuffers[name]      = nil
+      removed = removed + 1
+    end
+  end
+  return removed
 end
 
 -- =============================================================================
@@ -742,6 +766,7 @@ SlashCmdList["TRPLITE"] = function(input)
     TRPLite.log("|cff8C48AB/trp ping|r — broadcast your profile to others")
     TRPLite.log("|cff8C48AB/trp rejoin|r — re-join the TTRP chat channel")
     TRPLite.log("|cff8C48AB/trp minimap|r — show or hide the minimap button")
+    TRPLite.log("|cff8C48AB/trp clean|r — remove offline characters from the directory")
 
   elseif cmd == "dir" or cmd == "directory" then
     if TRPLite.UI and TRPLite.UI.openDirectory then
@@ -776,6 +801,14 @@ SlashCmdList["TRPLITE"] = function(input)
       TRPLite.UI.toggleMinimapIcon()
     else
       TRPLite.log("UI not loaded yet. Try /reload.")
+    end
+
+  elseif cmd == "clean" then
+    local n = TRPLite.cleanOffline()
+    TRPLite.log("Removed " .. n .. " offline character" ..
+                (n == 1 and "" or "s") .. ".")
+    if TRPLite.UI and TRPLite.UI.refreshDirectory then
+      TRPLite.UI.refreshDirectory()
     end
 
   else

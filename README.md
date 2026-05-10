@@ -30,9 +30,10 @@ Reload the client. Type `/trp` in chat to see the command list.
 | `/trp` | show command help |
 | `/trp dir` | open the directory of seen players |
 | `/trp profile` | open the profile editor |
-| `/trp ping` | broadcast your full profile (P + MR + TR + DR) immediately |
-| `/trp rejoin` | re-join the TTRP channel (recover from greyed-out state) |
+| `/trp ping` | broadcast your full profile |
+| `/trp rejoin` | re-join the TTRP channel |
 | `/trp minimap` | toggle the minimap button on or off |
+| `/trp clean` | remove offline characters from the directory |
 
 ## How the directory works
 
