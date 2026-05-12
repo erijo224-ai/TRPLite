@@ -255,11 +255,16 @@ local function makeRow(parent, idx)
   -- Click: re-request M/T/D for this player AND open the info viewer for
   -- them. Click is a hardware event, so the sends go through; the viewer
   -- subscribes to data updates and refreshes itself when chunks land.
+  --
+  -- We use the forced variant (NO_KEY) so the request can't be short-
+  -- circuited by a key match on the responder side — TurtleRP never
+  -- bumps its keys on edits, so without forcing NO_KEY a refresh click
+  -- after the sender added new fields would silently return nothing.
   row:SetScript("OnClick", function(self)
     if not self.charName or self.charName == "" then return end
-    TRPLite.requestData("M", self.charName)
-    TRPLite.requestData("T", self.charName)
-    TRPLite.requestData("D", self.charName)
+    TRPLite.requestDataForced("M", self.charName)
+    TRPLite.requestDataForced("T", self.charName)
+    TRPLite.requestDataForced("D", self.charName)
     TRPLite.log("Requested data from " .. self.charName .. "...")
     if TRPLite.UI.openInfoView then
       TRPLite.UI.openInfoView(self.charName)
@@ -885,10 +890,14 @@ function TRPLite.UI.refreshInfoView()
     f.rpFS:SetText("")
   end
 
-  -- Description (D bucket) — full text, may be multi-line.
-  if char and char.description and char.description ~= "" then
+  -- Description (D bucket) — full text, may be multi-line. TurtleRP sends
+  -- a single space " " as a placeholder when the description is empty
+  -- (to avoid an empty-payload edge case in its sender), so treat any
+  -- whitespace-only value as "no description" and skip the header too.
+  local desc = char and char.description
+  if desc and not string.match(desc, "^%s*$") then
     f.descHeader:SetText("Description")
-    f.descFS:SetText(char.description)
+    f.descFS:SetText(desc)
   else
     f.descHeader:SetText("")
     f.descFS:SetText("")

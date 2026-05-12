@@ -33,7 +33,7 @@
 
 TRPLite = TRPLite or {}
 TRPLite.channelName     = "TTRP"
-TRPLite.addonVersion    = "0.2.1"   -- v0.2.0 first stable release
+TRPLite.addonVersion    = "0.2.2"   -- v0.2.0 first stable release
 TRPLite.protocolVersion = "1.1.0"   -- match TurtleRP wire protocol
 TRPLite.chunkSize       = 200       -- chars of payload per chunked response
 
@@ -378,6 +378,102 @@ function TRPLite.requestData(typ, targetName)
   TRPLite.send(typ .. ":" .. targetName .. "~" .. key)
 end
 
+-- Same as requestData, but always sends "NO_KEY" so the responder can't
+-- short-circuit the reply on a matching cached key. Use this for
+-- user-initiated refreshes (directory row click, manual refresh) where
+-- "give me the latest" is the intended semantics. TurtleRP never bumps
+-- its profile keys when fields are edited, so without forcing NO_KEY a
+-- click after the sender's edits would silently get no reply.
+function TRPLite.requestDataForced(typ, targetName)
+  if not targetName or targetName == "" then return end
+  TRPLite.send(typ .. ":" .. targetName .. "~NO_KEY")
+end
+
+-- =============================================================================
+-- /trp diag — single-target request/response diagnostic
+-- =============================================================================
+--
+-- Fires M/T/D forced requests at a named player, then waits 5 seconds
+-- and reports which buckets responded. Useful when you want to know:
+-- is the other end's addon alive, on the channel, and replying — or is
+-- the silence because they have empty profile fields?
+--
+-- One diagnosis at a time. Running /trp diag again cancels any in-flight
+-- session and starts a fresh one. State is live-only (not persisted).
+
+TRPLite.diagState = nil
+
+function TRPLite.startDiagnosis(name)
+  if not name or name == "" then
+    TRPLite.log("Usage: |cff8C48AB/trp diag <name>|r")
+    return
+  end
+
+  -- Cancel any previous in-flight diagnosis so we don't get crossed reports.
+  if TRPLite.diagState and TRPLite.diagState.timer then
+    TRPLite.diagState.timer:SetScript("OnUpdate", nil)
+  end
+
+  TRPLite.diagState = {
+    target    = name,
+    startedAt = time(),
+    M = false, T = false, D = false,
+  }
+
+  TRPLite.requestDataForced("M", name)
+  TRPLite.requestDataForced("T", name)
+  TRPLite.requestDataForced("D", name)
+  TRPLite.log("Diagnosing |cffabd473" .. name ..
+              "|r: sent M/T/D with NO_KEY, watching for 5 seconds...")
+
+  local timer = CreateFrame("Frame")
+  TRPLite.diagState.timer = timer
+  local elapsed = 0
+  timer:SetScript("OnUpdate", function(self, dt)
+    elapsed = elapsed + (dt or 0)
+    if elapsed >= 5 then
+      self:SetScript("OnUpdate", nil)
+      TRPLite.reportDiagnosis()
+    end
+  end)
+end
+
+function TRPLite.reportDiagnosis()
+  local d = TRPLite.diagState
+  if not d then return end
+  local function flag(x)
+    return x and "|cff00ff00YES|r" or "|cffff5555NO|r"
+  end
+  TRPLite.log(string.format(
+    "Diagnosis for |cffabd473%s|r — M:%s  T:%s  D:%s",
+    d.target, flag(d.M), flag(d.T), flag(d.D)
+  ))
+
+  if not (d.M or d.T or d.D) then
+    TRPLite.log("|cffff5555No reply on any bucket within 5 seconds.|r Likely causes:")
+    TRPLite.log("  1. They aren't joined to TTRP. Have them run:")
+    TRPLite.log("     |cff8C48AB/run print(GetChannelName(\"TTRP\"))|r — if 0/nil, not joined.")
+    TRPLite.log("  2. Their RP addon is disabled, version is incompatible, or kill-switched.")
+    TRPLite.log("  3. Their UnitName(\"player\") doesn't match the request's subject name.")
+  elseif d.M and d.T and d.D then
+    local c = TRPLiteCharacters and TRPLiteCharacters[d.target]
+    if c then
+      TRPLite.log(string.format(
+        "  full_name=%q  ic_info=%q  description=%q",
+        tostring(c.full_name or ""),
+        tostring(c.ic_info or ""),
+        tostring(c.description or "")
+      ))
+      TRPLite.log("Empty fields above are present on their profile, not lost in transit.")
+    end
+  else
+    -- Partial: some buckets answered, some didn't. Less common; worth flagging.
+    TRPLite.log("Partial response — check that all three sends went out and the channel isn't dropping them.")
+  end
+
+  TRPLite.diagState = nil
+end
+
 -- Send my own data of one type, chunked. typ is "M", "T", or "D".
 -- Wire format: "MR:p~<myKey>~<chunkIdx>~<total>~<chunkData>"
 -- The literal "p" placeholder is taken straight from TurtleRP — receivers
@@ -579,6 +675,14 @@ function TRPLite.recvData(typ, sender, rest)
   local schema = TRPLite.fieldSchemas[base]
   if not schema then return end
 
+  -- Diagnostic flag: if /trp diag is in flight for this sender, mark the
+  -- bucket as "they answered" so the post-timeout report knows what came
+  -- back. Done early so a multi-chunk reply that errors mid-stream still
+  -- counts as a reply (we got at least one chunk).
+  if TRPLite.diagState and TRPLite.diagState.target == sender then
+    TRPLite.diagState[base] = true
+  end
+
   local parts = TRPLite.split(rest, "~")
   -- parts: senderKey, chunkIdx, totalChunks, chunkData1, chunkData2, ...
   local senderKey  = parts[1]
@@ -767,6 +871,7 @@ SlashCmdList["TRPLITE"] = function(input)
     TRPLite.log("|cff8C48AB/trp rejoin|r — re-join the TTRP chat channel")
     TRPLite.log("|cff8C48AB/trp minimap|r — show or hide the minimap button")
     TRPLite.log("|cff8C48AB/trp clean|r — remove offline characters from the directory")
+    TRPLite.log("|cff8C48AB/trp diag <name>|r — test whether a player's RP addon is responding")
 
   elseif cmd == "dir" or cmd == "directory" then
     if TRPLite.UI and TRPLite.UI.openDirectory then
@@ -810,6 +915,9 @@ SlashCmdList["TRPLITE"] = function(input)
     if TRPLite.UI and TRPLite.UI.refreshDirectory then
       TRPLite.UI.refreshDirectory()
     end
+
+  elseif cmd == "diag" or cmd == "diagnose" then
+    TRPLite.startDiagnosis(rest)
 
   else
     TRPLite.log("Unknown command. Try |cff8C48AB/trp help|r.")

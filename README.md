@@ -34,6 +34,7 @@ Reload the client. Type `/trp` in chat to see the command list.
 | `/trp rejoin` | re-join the TTRP channel |
 | `/trp minimap` | toggle the minimap button on or off |
 | `/trp clean` | remove offline characters from the directory |
+| `/trp diag <name>` | test whether a player's RP addon is responding |
 
 ## How the directory works
 
